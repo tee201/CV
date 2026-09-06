@@ -74,8 +74,7 @@ export default async function DriverDashboardPage() {
         <Link href={activeAttendance ? "/shift/end" : "/shift/start"} className="mt-4 block">
           <Button
             fullWidth
-            variant={activeAttendance ? "danger" : "primary"}
-            className={activeAttendance ? "" : "bg-white text-slate-900 hover:bg-slate-100"}
+            variant={activeAttendance ? "danger" : "inverse"}
           >
             {activeAttendance ? "End Shift" : "Start Shift"}
           </Button>

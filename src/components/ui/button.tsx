@@ -1,13 +1,20 @@
 import { type ButtonHTMLAttributes, forwardRef } from "react";
 import { clsx } from "@/lib/clsx";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "ghost" | "inverse";
 
 const variantClasses: Record<Variant, string> = {
   primary: "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:bg-blue-300",
   secondary: "bg-slate-100 text-slate-900 hover:bg-slate-200 active:bg-slate-300 disabled:bg-slate-50 disabled:text-slate-400",
   danger: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800 disabled:bg-red-300",
   ghost: "bg-transparent text-slate-700 hover:bg-slate-100 active:bg-slate-200",
+  // For use on a dark/colored surface (e.g. the status card) where the
+  // primary/secondary palettes would blend in. A dedicated variant, rather
+  // than overriding primary's classes via `className`, because Tailwind
+  // utility precedence is decided by generated stylesheet order, not by
+  // position in the class list — two same-specificity classes coming from
+  // different sources (variant vs. override) don't reliably override.
+  inverse: "bg-white text-slate-900 hover:bg-slate-100 active:bg-slate-200",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
