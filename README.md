@@ -97,10 +97,16 @@ a shift being changed or cancelled — closing out all four notification
 types the spec calls for. Service worker handles `push`/`notificationclick`
 to show the notification and focus/open the right page.
 
-## What's deferred
-
-An audit log viewer UI is designed into the schema/RLS plan but not yet
-built. See git history / follow-up work for progress.
+**Audit log viewer** (`/admin/audit-log`) — every row `log_audit_event()`
+writes (shift create/edit/delete, driver deactivate/reactivate, holiday
+request/decision, incident status change, an important announcement being
+published) shown newest-first, filterable by entity type, paginated with a
+stable cursor (`created_at`, not an offset, so a new row written between
+page loads can't shift already-seen rows onto the next page). Each entry
+expands to the specific fields that changed — `status: pending → approved`
+— rather than dumping the full before/after JSON blob. Nothing in the app
+can write to `audit_logs` directly (see the security notes below); this
+page only ever reads it.
 
 ## Push notifications: what's verified vs. what isn't
 

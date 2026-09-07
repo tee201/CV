@@ -85,6 +85,7 @@ function seed() {
       { id: uuid(), user_id: u.admin.id, policy_version: "2026-09-v1", acknowledged_at: now() },
     ],
     push_subscriptions: [],
+    audit_logs: [],
     storageObjects: new Map(),
   };
 }
@@ -189,6 +190,10 @@ function matchRow(row, filters) {
         return cell !== null && cell !== undefined && cell >= value;
       case "lte":
         return cell !== null && cell !== undefined && cell <= value;
+      case "lt":
+        return cell !== null && cell !== undefined && cell < value;
+      case "gt":
+        return cell !== null && cell !== undefined && cell > value;
       case "not.is":
         return value === "null" ? cell !== null && cell !== undefined : true;
       case "is":
@@ -248,13 +253,23 @@ function respondRows(res, req, rows, status) {
   return sendJson(res, status, rows);
 }
 
+// Matches `alias:profiles!fk_name(full_name)` embed syntax in a select
+// string and resolves it generically off whatever `<alias>_id` column the
+// row has — covers `driver:profiles!...` (shifts/holidays/incidents) and
+// `actor:profiles!...` (audit_logs) without hardcoding a table list.
+const PROFILE_EMBED_RE = /(\w+):profiles!\w+\(/g;
+
 function attachEmbeds(rows, selectParam) {
   let out = rows;
-  if (selectParam && selectParam.includes("profiles")) {
-    out = out.map((row) => ({
-      ...row,
-      driver: row.driver_id ? { full_name: db.profiles[row.driver_id]?.full_name ?? "Unknown driver" } : null,
-    }));
+  if (selectParam) {
+    for (const match of selectParam.matchAll(PROFILE_EMBED_RE)) {
+      const alias = match[1];
+      const idColumn = `${alias}_id`;
+      out = out.map((row) => ({
+        ...row,
+        [alias]: row[idColumn] ? { full_name: db.profiles[row[idColumn]]?.full_name ?? "Unknown driver" } : null,
+      }));
+    }
   }
   if (selectParam && selectParam.includes("holiday_request_dates")) {
     out = out.map((row) => ({
@@ -263,6 +278,23 @@ function attachEmbeds(rows, selectParam) {
     }));
   }
   return out;
+}
+
+// Mirrors log_audit_event() / the audit triggers in supabase/migrations/
+// 0002, 0004, 0009, 0012, 0013 — called from the same mutation points those
+// triggers fire from, so the audit log viewer has something real to show
+// when driven against this mock.
+function auditLog(actorId, action, entityType, entityId, before, after) {
+  db.audit_logs.push({
+    id: uuid(),
+    actor_id: actorId,
+    action,
+    entity_type: entityType,
+    entity_id: entityId,
+    before: before ?? null,
+    after: after ?? null,
+    created_at: now(),
+  });
 }
 
 function notifyHolidayDecision(request) {
@@ -338,6 +370,35 @@ async function handleRequest(req, res) {
       res.end();
       return;
     }
+    if (req.method === "PATCH") {
+      const body = JSON.parse((await readBody(req)).toString() || "{}");
+      const updated = [];
+      for (const row of rows) {
+        const before = { ...row };
+        Object.assign(row, body, { updated_at: now() });
+        updated.push(row);
+        if (before.employment_status === "active" && row.employment_status === "inactive") {
+          auditLog(
+            currentUserId,
+            "driver.deactivated",
+            "profile",
+            row.id,
+            { employment_status: "active" },
+            { employment_status: "inactive" },
+          );
+        } else if (before.employment_status === "inactive" && row.employment_status === "active") {
+          auditLog(
+            currentUserId,
+            "driver.reactivated",
+            "profile",
+            row.id,
+            { employment_status: "inactive" },
+            { employment_status: "active" },
+          );
+        }
+      }
+      return respondRows(res, req, updated, 200);
+    }
     return respondRows(res, req, rows, 200);
   }
 
@@ -356,18 +417,26 @@ async function handleRequest(req, res) {
       const body = JSON.parse((await readBody(req)).toString() || "{}");
       const row = { id: uuid(), status: "scheduled", end_time: null, created_at: now(), updated_at: now(), ...body };
       db.shifts.push(row);
+      auditLog(currentUserId, "shift.created", "shift", row.id, null, row);
       return respondRows(res, req, [row], 201);
     }
     if (req.method === "PATCH") {
       const filters = parseFilters(url.searchParams);
       const body = JSON.parse((await readBody(req)).toString() || "{}");
-      db.shifts = db.shifts.map((r) => (matchRow(r, filters) ? { ...r, ...body, updated_at: now() } : r));
+      db.shifts = db.shifts.map((r) => {
+        if (!matchRow(r, filters)) return r;
+        const before = { ...r };
+        const after = { ...r, ...body, updated_at: now() };
+        auditLog(currentUserId, "shift.updated", "shift", after.id, before, after);
+        return after;
+      });
       return respondRows(res, req, db.shifts.filter((r) => matchRow(r, filters)), 200);
     }
     if (req.method === "DELETE") {
       const filters = parseFilters(url.searchParams);
       const toDelete = db.shifts.filter((r) => matchRow(r, filters));
       db.shifts = db.shifts.filter((r) => !matchRow(r, filters));
+      for (const row of toDelete) auditLog(currentUserId, "shift.deleted", "shift", row.id, row, null);
       return respondRows(res, req, toDelete, 200);
     }
   }
@@ -393,6 +462,14 @@ async function handleRequest(req, res) {
         updated.push(row);
         if (before.status === "pending" && (row.status === "approved" || row.status === "rejected")) {
           notifyHolidayDecision(row);
+          auditLog(
+            currentUserId,
+            `holiday.${row.status}`,
+            "holiday_request",
+            row.id,
+            { status: before.status },
+            { status: row.status, admin_id: row.admin_id, admin_response: row.admin_response },
+          );
         }
       }
       return respondRows(res, req, updated, 200);
@@ -568,6 +645,7 @@ async function handleRequest(req, res) {
     for (const date of dates) {
       db.holiday_request_dates.push({ id: uuid(), holiday_request_id: id, date });
     }
+    auditLog(currentUserId, "holiday.requested", "holiday_request", id, null, db.holiday_requests[id]);
     return sendJson(res, 200, id);
   }
 
@@ -594,8 +672,12 @@ async function handleRequest(req, res) {
       for (const id of Object.keys(db.incidents)) {
         const row = db.incidents[id];
         if (!matchRow(row, filters)) continue;
+        const beforeStatus = row.status;
         Object.assign(row, body, { updated_at: now() });
         updated.push(row);
+        if (body.status && body.status !== beforeStatus) {
+          auditLog(currentUserId, "incident.status_changed", "incident", row.id, { status: beforeStatus }, { status: row.status });
+        }
       }
       return respondRows(res, req, updated, 200);
     }
@@ -644,6 +726,9 @@ async function handleRequest(req, res) {
       const id = uuid();
       const row = { id, created_at: now(), updated_at: now(), ...body };
       db.announcements[id] = row;
+      if (row.is_important) {
+        auditLog(currentUserId, "announcement.created_important", "announcement", id, null, row);
+      }
       return respondRows(res, req, [row], 201);
     }
     if (req.method === "PATCH") {
@@ -725,6 +810,17 @@ async function handleRequest(req, res) {
       db.push_subscriptions = db.push_subscriptions.filter((r) => !matchRow(r, filters));
       return respondRows(res, req, toDelete, 200);
     }
+  }
+
+  // --- REST: audit_logs (read-only — see log_audit_event() / auditLog() above) ---
+  if (path === "/rest/v1/audit_logs" && req.method === "GET") {
+    const filters = parseFilters(url.searchParams);
+    let rows = db.audit_logs.filter((r) => matchRow(r, filters));
+    rows = applyOrder(rows, url.searchParams.get("order"));
+    const limit = url.searchParams.get("limit");
+    if (limit) rows = rows.slice(0, Number(limit));
+    rows = attachEmbeds(rows, url.searchParams.get("select"));
+    return respondRows(res, req, rows, 200);
   }
 
   // --- Storage: sign URLs ---

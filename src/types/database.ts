@@ -179,6 +179,17 @@ export type PolicyAcknowledgement = {
   acknowledged_at: string;
 };
 
+export type AuditLogRow = {
+  id: string;
+  actor_id: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  before: unknown;
+  after: unknown;
+  created_at: string;
+};
+
 type NoRelationships = {
   Relationships: [];
 };
@@ -284,6 +295,15 @@ export type Database = {
         Insert: Pick<PushSubscriptionRow, "user_id" | "endpoint" | "p256dh" | "auth">;
         Update: Partial<Pick<PushSubscriptionRow, "p256dh" | "auth">>;
       } & NoRelationships;
+      // Insert/Update are both never: every row is written exclusively by
+      // the SECURITY DEFINER log_audit_event() function (see
+      // supabase/migrations/0002_audit_logs.sql) — no client role, including
+      // admin, can write to this table directly.
+      audit_logs: {
+        Row: AuditLogRow;
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+      } & Rel<"audit_logs_actor_id_fkey", "actor_id", "profiles">;
     };
     Views: Record<string, never>;
     Functions: {

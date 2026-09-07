@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/admin/announcements", label: "Announcements" },
   { href: "/admin/drivers", label: "Drivers" },
   { href: "/admin/vehicles", label: "Company vehicles" },
+  { href: "/admin/audit-log", label: "Audit log" },
 ] as const;
 
 export function AdminSidebar() {
