@@ -4,12 +4,25 @@ import { resetMockServer, loginAs } from "../support/fixtures";
 import { TEST_USERS } from "../support/users";
 
 const PHOTO_FIXTURE = path.join(__dirname, "..", "fixtures", "photo.jpg");
+const HEIC_FIXTURE = path.join(__dirname, "..", "fixtures", "photo.heic");
 
-async function completeInspection(page: import("@playwright/test").Page, submitLabel: string) {
+// Defaults to three JPEGs (the common camera-capture case); pass a mixed
+// array to exercise iPhone drivers picking HEIC photos from their library —
+// see src/lib/image/process-photo.ts, which converts HEIC client-side since
+// most non-Safari browsers can't decode it natively.
+async function completeInspection(
+  page: import("@playwright/test").Page,
+  submitLabel: string,
+  fixtures: [string, string, string] = [PHOTO_FIXTURE, PHOTO_FIXTURE, PHOTO_FIXTURE],
+) {
   const fileInputs = page.locator('input[type="file"]');
   await expect(fileInputs).toHaveCount(3);
   for (let i = 0; i < 3; i++) {
-    await fileInputs.nth(i).setInputFiles(PHOTO_FIXTURE);
+    await fileInputs.nth(i).setInputFiles(fixtures[i]);
+    // processPhoto() must finish (including, for a HEIC file, the on-demand
+    // heic2any conversion) before the tile reports "selected" — wait for
+    // that per-photo rather than racing all three through at once.
+    await expect(page.getByText(/Could not read that photo/)).toHaveCount(0);
   }
   const submit = page.getByRole("button", { name: submitLabel });
   await expect(submit).toBeEnabled();
@@ -73,7 +86,9 @@ test.describe("Shift workflow — company vehicle (3-photo handover)", () => {
     await page.getByRole("button", { name: "Continue to photo check" }).click();
     await expect(page.getByText(/Take a photo of each area/)).toBeVisible();
 
-    await completeInspection(page, "Submit inspection & start shift");
+    // Mixed HEIC/JPEG, matching a real iPhone driver picking photos from
+    // their library rather than shooting fresh through the camera prompt.
+    await completeInspection(page, "Submit inspection & start shift", [HEIC_FIXTURE, PHOTO_FIXTURE, HEIC_FIXTURE]);
 
     await expect(page).toHaveURL("/");
     await expect(page.getByText("Currently checked in")).toBeVisible();

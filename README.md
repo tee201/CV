@@ -42,7 +42,14 @@ the required 3-photo internal handover inspection (cab / rear / cargo) for
 company vehicles, enforced by database constraints so a shift cannot start
 or end with missing photos and a driver cannot hold two active shifts at
 once. Photos are re-encoded client-side before upload (strips EXIF/GPS,
-downsizes for mobile data) and stored in a private bucket.
+downsizes for mobile data) and stored in a private bucket. This includes a
+HEIC-to-JPEG conversion step for iPhone drivers who pick an existing photo
+from their library rather than shooting fresh through the camera prompt —
+see `src/lib/image/process-photo.ts`. Most non-Safari browsers (this
+includes most Android phones) have no built-in HEIC decoder at all and
+fail outright without it; confirmed by hand with a real HEIC file both
+before the fix (fails) and after (converts and uploads correctly) — see
+the photo formats note below.
 
 **Admin** — operations dashboard (who's checked in, who hasn't started a
 scheduled shift), company vehicle management, a week-view rota builder
@@ -130,6 +137,39 @@ verify real delivery is by hand, in an ordinary (non-incognito) browser
 window, with real VAPID keys configured: open `/profile`, tap "Enable
 notifications", approve a holiday request for that account from another
 session, and confirm the OS notification appears.
+
+## Photo formats: JPEG and HEIC
+
+Most drivers will be on iPhones, which default to shooting HEIC. Verified
+by hand with a real HEIC file (`tests/fixtures/photo.heic`, generated with
+`pillow-heif`), both in an ad-hoc browser check and in the Playwright suite
+(`tests/e2e/shifts.spec.ts`'s company-vehicle inspection test attaches a
+mix of HEIC and JPEG; `tests/e2e/incidents.spec.ts` attaches one of each):
+
+- **Before the fix:** a HEIC file failed outright in Chromium —
+  `createImageBitmap()` rejected it, surfacing as "Could not read that
+  photo. Try again." with no photo attached. Chromium has no built-in HEIC
+  decoder at all, and most Android phones ship Chromium-based browsers, so
+  this wasn't an iPhone-only edge case.
+- **The fix** (`src/lib/image/process-photo.ts`): detect a HEIC/HEIF file
+  (by MIME type, falling back to filename extension, falling back to
+  sniffing the file's `ftyp` box directly for the rare case a picker hands
+  over neither) and convert it to JPEG with `heic2any` — a WASM HEIF
+  decoder — before the existing resize/re-encode/EXIF-strip step. Confirmed
+  end-to-end: the converted photo uploads, and the stored bytes are a real,
+  correctly-sized JPEG (checked by fetching it back and decoding it).
+  `heic2any` is loaded via a dynamic `import()`, so its ~2.5MB WASM payload
+  is never downloaded for the common case of a JPEG straight from the
+  camera — confirmed in the production build output, where it lands in its
+  own chunk, not the shared bundle.
+- **Not verified, and can't be from this sandbox:** real Safari on a real
+  iPhone. WebKit has its own native HEIC decoder, so the fix above is very
+  likely redundant there rather than required — but this repo only has
+  Chromium available, and Chromium can't decode HEIC either way, so that
+  claim isn't something this test suite can confirm one way or the other.
+  Worth a manual check on an actual iPhone (Safari and any installed PWA)
+  before relying on it, since browser HEIC support has changed across iOS
+  versions before.
 
 ## End-to-end tests
 
