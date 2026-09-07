@@ -7,6 +7,8 @@ import { logout } from "@/lib/actions/auth";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/rota", label: "Rota" },
+  { href: "/admin/holidays", label: "Holiday requests" },
   { href: "/admin/vehicles", label: "Company vehicles" },
 ] as const;
 

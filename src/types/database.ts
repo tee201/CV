@@ -10,6 +10,7 @@ export type InspectionStatus = "pending" | "complete";
 export type PhotoCategory = "cab" | "rear" | "cargo";
 export type ShiftStatus = "scheduled" | "completed" | "cancelled";
 export type AttendanceStatus = "active" | "completed";
+export type HolidayRequestStatus = "pending" | "approved" | "rejected";
 
 // These are plain `type` aliases rather than `interface`s deliberately: the
 // Supabase query builder's generic types check `Row extends Record<string,
@@ -82,6 +83,36 @@ export type AttendanceRecord = {
   created_at: string;
 };
 
+export type HolidayRequest = {
+  id: string;
+  driver_id: string;
+  note: string | null;
+  status: HolidayRequestStatus;
+  admin_id: string | null;
+  admin_response: string | null;
+  decided_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HolidayRequestDate = {
+  id: string;
+  holiday_request_id: string;
+  date: string;
+};
+
+export type Notification = {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  related_type: string | null;
+  related_id: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
 type NoRelationships = {
   Relationships: [];
 };
@@ -113,7 +144,8 @@ export type Database = {
       } & NoRelationships;
       shifts: {
         Row: Shift;
-        Insert: Pick<Shift, "driver_id" | "shift_date" | "start_time"> & Partial<Pick<Shift, "end_time" | "status">>;
+        Insert: Pick<Shift, "driver_id" | "shift_date" | "start_time" | "created_by"> &
+          Partial<Pick<Shift, "end_time" | "status">>;
         Update: Partial<Pick<Shift, "driver_id" | "shift_date" | "start_time" | "end_time" | "status">>;
       } & Rel<"shifts_driver_id_fkey", "driver_id", "profiles">;
       vehicle_inspections: {
@@ -131,6 +163,21 @@ export type Database = {
         Insert: Record<string, never>;
         Update: Record<string, never>;
       } & Rel<"attendance_records_driver_id_fkey", "driver_id", "profiles">;
+      holiday_requests: {
+        Row: HolidayRequest;
+        Insert: Record<string, never>;
+        Update: Partial<Pick<HolidayRequest, "status" | "admin_id" | "admin_response" | "decided_at">>;
+      } & Rel<"holiday_requests_driver_id_fkey", "driver_id", "profiles">;
+      holiday_request_dates: {
+        Row: HolidayRequestDate;
+        Insert: Record<string, never>;
+        Update: Record<string, never>;
+      } & Rel<"holiday_request_dates_holiday_request_id_fkey", "holiday_request_id", "holiday_requests">;
+      notifications: {
+        Row: Notification;
+        Insert: Record<string, never>;
+        Update: Partial<Pick<Notification, "read_at">>;
+      } & NoRelationships;
     };
     Views: Record<string, never>;
     Functions: {
@@ -145,6 +192,7 @@ export type Database = {
         Returns: string;
       };
       end_shift: { Args: { p_attendance_id: string; p_end_inspection_id: string | null }; Returns: void };
+      create_holiday_request: { Args: { p_dates: string[]; p_note: string | null }; Returns: string };
     };
   };
 }

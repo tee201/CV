@@ -42,15 +42,27 @@ once. Photos are re-encoded client-side before upload (strips EXIF/GPS,
 downsizes for mobile data) and stored in a private bucket.
 
 **Admin** — operations dashboard (who's checked in, who hasn't started a
-scheduled shift), company vehicle management.
+scheduled shift), company vehicle management, a week-view rota builder
+(create/edit/delete shifts, assign or unassign a driver, prev/next week
+navigation), holiday request approvals (approve/reject with an optional
+response to the driver).
 
-**Rota (driver, read-only)**, **profile**, and a static **Emergency Help**
-page are also built.
+**Rota** — driver read-only upcoming-shifts view; admin full CRUD week view.
+
+**Holiday requests** — driver picks one or more dates plus an optional note
+and submits; status (pending/approved/rejected) and any admin response are
+visible on the same page. Admin sees pending requests grouped separately
+from recent decisions. Every request creation and decision is written to
+the audit log, and a decision creates an in-app notification for the driver
+(surfaced as a dismissible card at the top of their dashboard, since the
+bottom nav has no spare slot for a dedicated notifications tab).
+
+**Profile** and a static **Emergency Help** page are also built.
 
 ## What's deferred
 
-Holiday requests, incident reporting, announcements, notifications, the
-full admin rota builder, driver account management, audit log viewer UI,
+Incident reporting, announcements, the full notification system (push,
+shift-change alerts), driver account management, an audit log viewer UI,
 and the Playwright suite are designed into the schema/RLS plan but not yet
 built — they show as "coming soon" in the driver nav rather than fake data.
 Building all of the above to a real standard needed more than one pass; see

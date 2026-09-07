@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { createClient } from "@/lib/supabase/server";
 import { getActiveAttendance, getNextShift } from "@/lib/data/attendance";
+import { getUnreadNotifications } from "@/lib/data/notifications";
+import { markNotificationRead } from "@/lib/actions/notifications";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 
@@ -24,9 +26,10 @@ function formatShiftDate(dateStr: string): string {
 export default async function DriverDashboardPage() {
   const profile = await getCurrentProfile();
   const supabase = await createClient();
-  const [activeAttendance, nextShift] = await Promise.all([
+  const [activeAttendance, nextShift, notifications] = await Promise.all([
     getActiveAttendance(supabase, profile.id),
     getNextShift(supabase, profile.id),
+    getUnreadNotifications(supabase, profile.id),
   ]);
 
   const firstName = profile.full_name.split(" ")[0];
@@ -44,6 +47,29 @@ export default async function DriverDashboardPage() {
           </button>
         </form>
       </header>
+
+      {notifications.length > 0 && (
+        <section aria-label="Notifications" className="flex flex-col gap-2">
+          {notifications.map((notification) => (
+            <div key={notification.id} className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-blue-900">{notification.title}</p>
+                  {notification.body && (
+                    <p className="mt-0.5 whitespace-pre-line text-sm text-blue-800">{notification.body}</p>
+                  )}
+                </div>
+                <form action={markNotificationRead}>
+                  <input type="hidden" name="id" value={notification.id} />
+                  <button type="submit" aria-label="Dismiss" className="shrink-0 text-sm font-medium text-blue-700">
+                    Dismiss
+                  </button>
+                </form>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section
         aria-live="polite"
