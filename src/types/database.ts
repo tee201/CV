@@ -11,6 +11,9 @@ export type PhotoCategory = "cab" | "rear" | "cargo";
 export type ShiftStatus = "scheduled" | "completed" | "cancelled";
 export type AttendanceStatus = "active" | "completed";
 export type HolidayRequestStatus = "pending" | "approved" | "rejected";
+export type IncidentType = "vehicle_accident" | "vehicle_issue" | "breakdown" | "safety_issue" | "route_issue" | "other";
+export type IncidentUrgency = "low" | "medium" | "high";
+export type IncidentStatus = "new" | "under_review" | "resolved";
 
 // These are plain `type` aliases rather than `interface`s deliberately: the
 // Supabase query builder's generic types check `Row extends Record<string,
@@ -113,6 +116,60 @@ export type Notification = {
   created_at: string;
 };
 
+export type Incident = {
+  id: string;
+  driver_id: string;
+  incident_type: IncidentType;
+  occurred_at: string;
+  location: string;
+  description: string;
+  urgency: IncidentUrgency;
+  status: IncidentStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IncidentPhoto = {
+  id: string;
+  incident_id: string;
+  storage_path: string;
+  uploaded_by: string;
+  uploaded_at: string;
+};
+
+export type IncidentNote = {
+  id: string;
+  incident_id: string;
+  admin_id: string;
+  note: string;
+  created_at: string;
+};
+
+export type Announcement = {
+  id: string;
+  title: string;
+  message: string;
+  is_important: boolean;
+  publish_date: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AnnouncementAcknowledgement = {
+  id: string;
+  announcement_id: string;
+  driver_id: string;
+  acknowledged_at: string;
+};
+
+export type PolicyAcknowledgement = {
+  id: string;
+  user_id: string;
+  policy_version: string;
+  acknowledged_at: string;
+};
+
 type NoRelationships = {
   Relationships: [];
 };
@@ -135,7 +192,11 @@ export type Database = {
       profiles: {
         Row: Profile;
         Insert: Record<string, never>;
-        Update: Partial<Pick<Profile, "full_name" | "phone">>;
+        // full_name/phone: driver self-service edit. role/employment_status:
+        // admin-only, enforced by RLS (see profiles_update_own_or_admin),
+        // not by this type — the type just needs to admit the shape either
+        // caller sends.
+        Update: Partial<Pick<Profile, "full_name" | "phone" | "role" | "employment_status">>;
       } & NoRelationships;
       company_vehicles: {
         Row: CompanyVehicle;
@@ -178,6 +239,37 @@ export type Database = {
         Insert: Record<string, never>;
         Update: Partial<Pick<Notification, "read_at">>;
       } & NoRelationships;
+      policy_acknowledgements: {
+        Row: PolicyAcknowledgement;
+        Insert: Pick<PolicyAcknowledgement, "user_id" | "policy_version">;
+        Update: Record<string, never>;
+      } & NoRelationships;
+      incidents: {
+        Row: Incident;
+        Insert: Pick<Incident, "driver_id" | "incident_type" | "occurred_at" | "location" | "description" | "urgency">;
+        Update: Partial<Pick<Incident, "status">>;
+      } & Rel<"incidents_driver_id_fkey", "driver_id", "profiles">;
+      incident_photos: {
+        Row: IncidentPhoto;
+        Insert: Pick<IncidentPhoto, "incident_id" | "storage_path" | "uploaded_by">;
+        Update: Record<string, never>;
+      } & Rel<"incident_photos_incident_id_fkey", "incident_id", "incidents">;
+      incident_notes: {
+        Row: IncidentNote;
+        Insert: Pick<IncidentNote, "incident_id" | "admin_id" | "note">;
+        Update: Record<string, never>;
+      } & NoRelationships;
+      announcements: {
+        Row: Announcement;
+        Insert: Pick<Announcement, "title" | "message" | "created_by"> &
+          Partial<Pick<Announcement, "is_important" | "publish_date">>;
+        Update: Partial<Pick<Announcement, "title" | "message" | "is_important" | "publish_date">>;
+      } & NoRelationships;
+      announcement_acknowledgements: {
+        Row: AnnouncementAcknowledgement;
+        Insert: Pick<AnnouncementAcknowledgement, "announcement_id" | "driver_id">;
+        Update: Record<string, never>;
+      } & Rel<"announcement_acknowledgements_announcement_id_fkey", "announcement_id", "announcements">;
     };
     Views: Record<string, never>;
     Functions: {

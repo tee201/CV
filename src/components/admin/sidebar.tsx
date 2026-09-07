@@ -9,6 +9,9 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/rota", label: "Rota" },
   { href: "/admin/holidays", label: "Holiday requests" },
+  { href: "/admin/incidents", label: "Incidents" },
+  { href: "/admin/announcements", label: "Announcements" },
+  { href: "/admin/drivers", label: "Drivers" },
   { href: "/admin/vehicles", label: "Company vehicles" },
 ] as const;
 
@@ -49,7 +52,7 @@ export function AdminSidebar() {
 
       <nav
         aria-label="Admin"
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white md:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex overflow-x-auto border-t border-slate-200 bg-white md:hidden"
       >
         {NAV_ITEMS.map(({ href, label }) => {
           const isActive = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
@@ -58,7 +61,7 @@ export function AdminSidebar() {
               key={href}
               href={href}
               className={clsx(
-                "flex min-h-14 flex-1 items-center justify-center text-xs font-semibold",
+                "flex min-h-14 min-w-20 flex-1 shrink-0 items-center justify-center whitespace-nowrap px-3 text-xs font-semibold",
                 isActive ? "text-blue-600" : "text-slate-500",
               )}
             >

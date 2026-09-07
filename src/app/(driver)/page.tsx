@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getActiveAttendance, getNextShift } from "@/lib/data/attendance";
 import { getUnreadNotifications } from "@/lib/data/notifications";
 import { markNotificationRead } from "@/lib/actions/notifications";
+import { getUnacknowledgedImportantCount } from "@/lib/data/announcements";
 import { Button } from "@/components/ui/button";
 import { logout } from "@/lib/actions/auth";
 
@@ -26,10 +27,11 @@ function formatShiftDate(dateStr: string): string {
 export default async function DriverDashboardPage() {
   const profile = await getCurrentProfile();
   const supabase = await createClient();
-  const [activeAttendance, nextShift, notifications] = await Promise.all([
+  const [activeAttendance, nextShift, notifications, unacknowledgedAnnouncements] = await Promise.all([
     getActiveAttendance(supabase, profile.id),
     getNextShift(supabase, profile.id),
     getUnreadNotifications(supabase, profile.id),
+    getUnacknowledgedImportantCount(supabase, profile.id),
   ]);
 
   const firstName = profile.full_name.split(" ")[0];
@@ -47,6 +49,16 @@ export default async function DriverDashboardPage() {
           </button>
         </form>
       </header>
+
+      {unacknowledgedAnnouncements > 0 && (
+        <Link
+          href="/announcements"
+          className="rounded-xl border-2 border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"
+        >
+          {unacknowledgedAnnouncements} important announcement{unacknowledgedAnnouncements > 1 ? "s" : ""} need
+          {unacknowledgedAnnouncements > 1 ? "" : "s"} your acknowledgement →
+        </Link>
+      )}
 
       {notifications.length > 0 && (
         <section aria-label="Notifications" className="flex flex-col gap-2">
@@ -127,7 +139,7 @@ export default async function DriverDashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <QuickAction href="/rota" label="View Rota" />
           <QuickAction href="/requests" label="Request Holiday" />
-          <QuickAction href="/incidents" label="Report Incident" />
+          <QuickAction href="/incidents/new" label="Report Incident" />
           <QuickAction href="/emergency" label="Emergency Help" emphasis="danger" />
         </div>
       </section>

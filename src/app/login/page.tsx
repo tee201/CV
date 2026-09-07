@@ -1,12 +1,24 @@
 "use client";
 
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { login, type ActionState } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
 
 const initialState: ActionState = { error: null };
+
+function DeactivatedNotice() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("deactivated") !== "1") return null;
+
+  return (
+    <p role="alert" className="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
+      This account is no longer active. Contact your manager if you think this is a mistake.
+    </p>
+  );
+}
 
 export default function LoginPage() {
   const [state, formAction, isPending] = useActionState(login, initialState);
@@ -16,6 +28,10 @@ export default function LoginPage() {
       <div className="mx-auto w-full max-w-sm">
         <h1 className="text-2xl font-bold text-slate-900">Driver Portal</h1>
         <p className="mt-1 text-slate-600">Sign in with your work account.</p>
+
+        <Suspense fallback={null}>
+          <DeactivatedNotice />
+        </Suspense>
 
         <form action={formAction} className="mt-8 flex flex-col gap-4" noValidate>
           <TextField

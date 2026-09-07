@@ -12,3 +12,14 @@ export async function getActiveDrivers(supabase: SupabaseClient<Database>): Prom
   if (error) throw error;
   return data ?? [];
 }
+
+export async function getAllDrivers(supabase: SupabaseClient<Database>): Promise<Profile[]> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "driver")
+    .order("full_name", { ascending: true });
+
+  if (error) throw error;
+  return data ?? [];
+}

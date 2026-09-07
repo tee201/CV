@@ -23,6 +23,16 @@ export async function getCurrentProfile(): Promise<Profile> {
     redirect("/login");
   }
 
+  // A deactivated account keeps a valid Supabase Auth session (Auth doesn't
+  // know about our employment_status column), so this check is what actually
+  // stops a former/suspended employee from using the app once their profile
+  // is flagged inactive. Sign the session out rather than just redirecting,
+  // so the stale cookie can't just be reused to bypass this on the next load.
+  if (profile.employment_status !== "active") {
+    await supabase.auth.signOut();
+    redirect("/login?deactivated=1");
+  }
+
   return profile;
 }
 
