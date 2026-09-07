@@ -99,10 +99,8 @@ to show the notification and focus/open the right page.
 
 ## What's deferred
 
-An audit log viewer UI and the Playwright suite are designed into the
-schema/RLS plan but not yet built. Building all of the above to a real
-standard needed more than one pass; see git history / follow-up work for
-progress.
+An audit log viewer UI is designed into the schema/RLS plan but not yet
+built. See git history / follow-up work for progress.
 
 ## Push notifications: what's verified vs. what isn't
 
@@ -126,6 +124,59 @@ verify real delivery is by hand, in an ordinary (non-incognito) browser
 window, with real VAPID keys configured: open `/profile`, tap "Enable
 notifications", approve a holiday request for that account from another
 session, and confirm the OS notification appears.
+
+## End-to-end tests
+
+`tests/e2e/` has a Playwright suite covering the critical paths: login
+(including a wrong password and a deactivated account), starting and
+ending a shift on both a personal and a company vehicle (the real 3-photo
+handover, with a throwaway JPEG fixture), a driver being blocked from a
+second active shift, holiday request submit/approve/reject, incident
+report + admin triage, and admin publishing an important announcement
+through to a driver acknowledging it. One further test — a driver's direct
+API query for another driver's data returning nothing — only runs against
+a real Supabase project (see below); it's skipped otherwise rather than
+giving a false pass.
+
+Run it:
+
+```
+npm run test:e2e        # headless
+npm run test:e2e:ui     # Playwright's interactive UI mode
+```
+
+**Test backend.** `playwright.config.ts` boots two local processes for the
+run: `tests/support/mock-supabase-server.mjs` (a small hand-written stand-in
+for the Supabase Auth/PostgREST/Storage HTTP APIs) and `next dev` pointed at
+it. This makes the suite fast and dependency-free — no real Supabase project
+needed to run it — but the mock **has no Row Level Security**. It implements
+exactly the requests this app makes, filtered by whatever query the client
+sends, so a test only proves the *application* asks for the right data —
+never that the *database* would refuse a client that asked for the wrong
+data on purpose. That guarantee lives entirely in the RLS policies under
+`supabase/migrations/`, and the one test that specifically checks it
+(`tests/e2e/rls-isolation.spec.ts`) is written to require a real project:
+
+```
+E2E_SUPABASE_URL=... E2E_SUPABASE_ANON_KEY=... \
+E2E_DRIVER1_EMAIL=... E2E_DRIVER1_PASSWORD=... \
+E2E_DRIVER2_EMAIL=... E2E_DRIVER2_PASSWORD=... \
+npx playwright test tests/e2e/rls-isolation.spec.ts
+```
+
+Use a disposable/staging project for this, never production data.
+
+**A real bug this suite caught while being written:** the deactivated-driver
+test originally sent the browser into an infinite redirect loop. The cause
+was `getCurrentProfile()` calling `supabase.auth.signOut()` from a Server
+Component render (a layout), where cookie mutation is silently a no-op —
+so the account's session was never actually cleared, and the app kept
+bouncing between `/` and `/login?deactivated=1` forever. The fix moved that
+check into `src/lib/supabase/middleware.ts`, the one place in the request
+lifecycle that can actually write the cleared cookie onto the response.
+Left as-is, a deactivated employee's existing session would have kept
+working indefinitely — worth calling out given this project's stated
+priority order puts security first.
 
 ## Security notes
 

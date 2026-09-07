@@ -23,13 +23,16 @@ export async function getCurrentProfile(): Promise<Profile> {
     redirect("/login");
   }
 
-  // A deactivated account keeps a valid Supabase Auth session (Auth doesn't
-  // know about our employment_status column), so this check is what actually
-  // stops a former/suspended employee from using the app once their profile
-  // is flagged inactive. Sign the session out rather than just redirecting,
-  // so the stale cookie can't just be reused to bypass this on the next load.
+  // Defense in depth: middleware (src/lib/supabase/middleware.ts) is what
+  // actually terminates a deactivated employee's session, because it's the
+  // only place that can clear the auth cookie (a Server Component render
+  // has no response to attach that mutation to — calling signOut() here is
+  // a no-op that silently does nothing, which used to cause an infinite
+  // redirect loop). This check should be unreachable in practice since
+  // middleware runs first on every request, but it stays as a second layer
+  // in case this function is ever called from a context middleware doesn't
+  // cover.
   if (profile.employment_status !== "active") {
-    await supabase.auth.signOut();
     redirect("/login?deactivated=1");
   }
 
