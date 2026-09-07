@@ -1,6 +1,7 @@
 import { getCurrentProfile } from "@/lib/auth/current-profile";
 import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
+import { NotificationsOptIn } from "@/components/profile/notifications-opt-in";
 
 export default async function ProfilePage() {
   const profile = await getCurrentProfile();
@@ -17,6 +18,8 @@ export default async function ProfilePage() {
           <Field label="Role" value={profile.role === "admin" ? "Administrator" : "Driver"} />
         </dl>
       </div>
+
+      <NotificationsOptIn />
 
       <form action={logout}>
         <Button type="submit" variant="secondary" fullWidth>

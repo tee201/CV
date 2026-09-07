@@ -90,12 +90,42 @@ per driver. Content lives in
 `src/components/policy/privacy-notice-content.tsx` — it's a starting point,
 not reviewed legal text.
 
+**Push notifications** — drivers opt in from Profile ("Enable notifications").
+Sent (best-effort, alongside the same in-app notification, never instead of
+it) for: holiday approved/rejected, an important announcement published, and
+a shift being changed or cancelled — closing out all four notification
+types the spec calls for. Service worker handles `push`/`notificationclick`
+to show the notification and focus/open the right page.
+
 ## What's deferred
 
-Push notifications, shift-change alerts, an audit log viewer UI, and the
-Playwright suite are designed into the schema/RLS plan but not yet built.
-Building all of the above to a real standard needed more than one pass; see
-git history / follow-up work for progress.
+An audit log viewer UI and the Playwright suite are designed into the
+schema/RLS plan but not yet built. Building all of the above to a real
+standard needed more than one pass; see git history / follow-up work for
+progress.
+
+## Push notifications: what's verified vs. what isn't
+
+Verified end-to-end in this sandbox: the opt-in UI, the service worker
+registering, `push_subscriptions` being written via RLS, and — importantly
+— that a failed send never breaks the action it's attached to (approving a
+holiday with a deliberately-fake, unreachable subscription in the database
+still completed normally; the failure was swallowed inside
+`sendPushToUser`).
+
+**Not verified, and not verifiable in this environment:** an actual
+notification arriving on a device. `PushManager.subscribe()` is a browser
+API that talks to the browser vendor's real push service (FCM for Chrome,
+Mozilla's for Firefox, etc.) — and Chromium **refuses to support the Push
+API at all in incognito-style browser contexts** (this is a deliberate,
+undetectable Chrome policy, not a bug: https://crbug.com/401439). Every
+automated browser context — Playwright included — is exactly that kind of
+context, so no amount of testing infrastructure in this repo can drive a
+real subscription through a headless/automated Chrome. The only way to
+verify real delivery is by hand, in an ordinary (non-incognito) browser
+window, with real VAPID keys configured: open `/profile`, tap "Enable
+notifications", approve a holiday request for that account from another
+session, and confirm the OS notification appears.
 
 ## Security notes
 

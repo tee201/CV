@@ -52,3 +52,41 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// --- Web Push ---
+// The payload is plain JSON set by the server (see src/lib/push/send.ts):
+// { title, body?, url? }. Never assume push data is trusted input from the
+// page's own origin — it's whatever the push service delivered — so this
+// only ever displays it as inert notification text, never as HTML.
+self.addEventListener("push", (event) => {
+  let payload = { title: "Driver Ops" };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // Malformed payload: still show a generic notification rather than
+    // silently dropping it.
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      data: { url: payload.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && "focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    }),
+  );
+});

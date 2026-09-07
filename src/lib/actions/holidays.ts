@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/current-profile";
+import { sendPushToUser } from "@/lib/push/send";
 
 export interface ActionState {
   error: string | null;
@@ -57,7 +58,7 @@ export async function decideHolidayRequest(_prevState: ActionState, formData: Fo
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("holiday_requests")
     .update({
       status: parsed.data.decision,
@@ -66,11 +67,19 @@ export async function decideHolidayRequest(_prevState: ActionState, formData: Fo
       decided_at: new Date().toISOString(),
     })
     .eq("id", parsed.data.id)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .select("driver_id")
+    .single();
 
   if (error) {
     return { error: "Could not save the decision. Please try again." };
   }
+
+  await sendPushToUser(supabase, data.driver_id, {
+    title: parsed.data.decision === "approved" ? "Holiday request approved" : "Holiday request rejected",
+    body: parsed.data.response || undefined,
+    url: "/requests",
+  });
 
   revalidatePath("/admin/holidays");
   return { error: null };

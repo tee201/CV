@@ -4,6 +4,12 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/current-profile";
+import { sendPushToUser } from "@/lib/push/send";
+
+function formatShiftForPush(dateStr: string, startTime: string, endTime: string | null): string {
+  const date = new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return endTime ? `${date} ${startTime.slice(0, 5)} - ${endTime.slice(0, 5)}` : `${date} ${startTime.slice(0, 5)}`;
+}
 
 export interface ActionState {
   error: string | null;
@@ -65,10 +71,13 @@ export async function updateShift(_prevState: ActionState, formData: FormData): 
   }
 
   const supabase = await createClient();
+  const { data: before } = await supabase.from("shifts").select("driver_id").eq("id", id).single();
+
+  const newDriverId = parsed.data.driver_id || null;
   const { error } = await supabase
     .from("shifts")
     .update({
-      driver_id: parsed.data.driver_id || null,
+      driver_id: newDriverId,
       shift_date: parsed.data.shift_date,
       start_time: parsed.data.start_time,
       end_time: parsed.data.end_time || null,
@@ -77,6 +86,23 @@ export async function updateShift(_prevState: ActionState, formData: FormData): 
 
   if (error) {
     return { error: "Could not update the shift. Please try again." };
+  }
+
+  // In-app notifications for this are created by a database trigger
+  // (migration 0016) so they fire regardless of how the row changes; push is
+  // driven from here since Postgres can't reach an external push service.
+  if (before?.driver_id && before.driver_id !== newDriverId) {
+    await sendPushToUser(supabase, before.driver_id, {
+      title: "Shift removed from your rota",
+      url: "/rota",
+    });
+  }
+  if (newDriverId) {
+    await sendPushToUser(supabase, newDriverId, {
+      title: "Your shift was updated",
+      body: formatShiftForPush(parsed.data.shift_date, parsed.data.start_time, parsed.data.end_time || null),
+      url: "/rota",
+    });
   }
 
   revalidatePath("/admin/rota");
@@ -89,7 +115,17 @@ export async function deleteShift(formData: FormData): Promise<void> {
   if (!id) return;
 
   const supabase = await createClient();
+  const { data: shift } = await supabase.from("shifts").select("driver_id, shift_date").eq("id", id).single();
+
   await supabase.from("shifts").delete().eq("id", id);
+
+  if (shift?.driver_id) {
+    await sendPushToUser(supabase, shift.driver_id, {
+      title: "Shift cancelled",
+      body: `Your shift on ${new Date(`${shift.shift_date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} has been removed.`,
+      url: "/rota",
+    });
+  }
 
   revalidatePath("/admin/rota");
 }

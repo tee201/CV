@@ -4,6 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth/current-profile";
+import { getActiveDrivers } from "@/lib/data/drivers";
+import { sendPushToUsers } from "@/lib/push/send";
 
 export interface ActionState {
   error: string | null;
@@ -37,6 +39,21 @@ export async function createAnnouncement(_prevState: ActionState, formData: Form
 
   if (error) {
     return { error: "Could not create the announcement. Please try again." };
+  }
+
+  // The in-app notification row is created by a database trigger (see
+  // migration 0015) so it happens atomically with the insert regardless of
+  // how the row gets created. Push is a separate, best-effort delivery
+  // channel this app code drives directly, since Postgres can't reach an
+  // external push service on its own.
+  const isPublishedNow = parsed.data.is_important && parsed.data.publish_date <= new Date().toISOString().slice(0, 10);
+  if (isPublishedNow) {
+    const drivers = await getActiveDrivers(supabase);
+    await sendPushToUsers(
+      supabase,
+      drivers.map((d) => d.id),
+      { title: parsed.data.title, body: parsed.data.message, url: "/announcements" },
+    );
   }
 
   revalidatePath("/admin/announcements");

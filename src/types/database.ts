@@ -145,6 +145,15 @@ export type IncidentNote = {
   created_at: string;
 };
 
+export type PushSubscriptionRow = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  created_at: string;
+};
+
 export type Announcement = {
   id: string;
   title: string;
@@ -270,6 +279,11 @@ export type Database = {
         Insert: Pick<AnnouncementAcknowledgement, "announcement_id" | "driver_id">;
         Update: Record<string, never>;
       } & Rel<"announcement_acknowledgements_announcement_id_fkey", "announcement_id", "announcements">;
+      push_subscriptions: {
+        Row: PushSubscriptionRow;
+        Insert: Pick<PushSubscriptionRow, "user_id" | "endpoint" | "p256dh" | "auth">;
+        Update: Partial<Pick<PushSubscriptionRow, "p256dh" | "auth">>;
+      } & NoRelationships;
     };
     Views: Record<string, never>;
     Functions: {
