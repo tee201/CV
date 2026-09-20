@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/admin/incidents", label: "Incidents" },
   { href: "/admin/announcements", label: "Announcements" },
   { href: "/admin/drivers", label: "Drivers" },
+  { href: "/admin/payslips", label: "Payslips" },
   { href: "/admin/vehicles", label: "Company vehicles" },
   { href: "/admin/audit-log", label: "Audit log" },
 ] as const;

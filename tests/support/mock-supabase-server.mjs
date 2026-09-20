@@ -77,6 +77,7 @@ function seed() {
     incidents: {},
     incident_photos: [],
     incident_notes: [],
+    work_logs: [],
     announcements: {},
     announcement_acknowledgements: [],
     policy_acknowledgements: [
@@ -710,6 +711,44 @@ async function handleRequest(req, res) {
       const row = { id: uuid(), created_at: now(), ...body };
       db.incident_notes.push(row);
       return respondRows(res, req, [row], 201);
+    }
+  }
+
+  // --- REST: work_logs ---
+  if (path === "/rest/v1/work_logs") {
+    if (req.method === "GET") {
+      const filters = parseFilters(url.searchParams);
+      let rows = db.work_logs.filter((r) => matchRow(r, filters));
+      rows = applyOrder(rows, url.searchParams.get("order"));
+      return respondRows(res, req, rows, 200);
+    }
+    if (req.method === "POST") {
+      // supabase-js .upsert({...}, {onConflict:"driver_id,work_date"}) issues
+      // POST with a Prefer: resolution=merge-duplicates header rather than a
+      // separate verb — mirrors the push_subscriptions handling below.
+      const body = JSON.parse((await readBody(req)).toString() || "{}");
+      const existingIdx = db.work_logs.findIndex(
+        (r) => r.driver_id === body.driver_id && r.work_date === body.work_date,
+      );
+      let row;
+      if (existingIdx >= 0) {
+        const before = { ...db.work_logs[existingIdx] };
+        row = { ...before, ...body, updated_at: now() };
+        db.work_logs[existingIdx] = row;
+        auditLog(currentUserId, "work_log.updated", "work_log", row.id, before, row);
+      } else {
+        row = { id: uuid(), drops: 0, is_training: false, created_at: now(), updated_at: now(), ...body };
+        db.work_logs.push(row);
+        auditLog(currentUserId, "work_log.created", "work_log", row.id, null, row);
+      }
+      return respondRows(res, req, [row], 201);
+    }
+    if (req.method === "DELETE") {
+      const filters = parseFilters(url.searchParams);
+      const toDelete = db.work_logs.filter((r) => matchRow(r, filters));
+      db.work_logs = db.work_logs.filter((r) => !matchRow(r, filters));
+      for (const row of toDelete) auditLog(currentUserId, "work_log.deleted", "work_log", row.id, row, null);
+      return respondRows(res, req, toDelete, 200);
     }
   }
 

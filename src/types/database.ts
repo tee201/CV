@@ -179,6 +179,18 @@ export type PolicyAcknowledgement = {
   acknowledged_at: string;
 };
 
+export type WorkLog = {
+  id: string;
+  driver_id: string;
+  work_date: string;
+  route_number: string;
+  drops: number;
+  is_training: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AuditLogRow = {
   id: string;
   actor_id: string | null;
@@ -279,6 +291,12 @@ export type Database = {
         Insert: Pick<IncidentNote, "incident_id" | "admin_id" | "note">;
         Update: Record<string, never>;
       } & NoRelationships;
+      work_logs: {
+        Row: WorkLog;
+        Insert: Pick<WorkLog, "driver_id" | "work_date" | "route_number" | "created_by"> &
+          Partial<Pick<WorkLog, "drops" | "is_training">>;
+        Update: Partial<Pick<WorkLog, "route_number" | "drops" | "is_training">>;
+      } & Rel<"work_logs_driver_id_fkey", "driver_id", "profiles">;
       announcements: {
         Row: Announcement;
         Insert: Pick<Announcement, "title" | "message" | "created_by"> &

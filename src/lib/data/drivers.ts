@@ -23,3 +23,10 @@ export async function getAllDrivers(supabase: SupabaseClient<Database>): Promise
   if (error) throw error;
   return data ?? [];
 }
+
+export async function getDriverById(supabase: SupabaseClient<Database>, driverId: string): Promise<Profile | null> {
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", driverId).maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
