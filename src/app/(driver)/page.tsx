@@ -140,6 +140,7 @@ export default async function DriverDashboardPage() {
           <QuickAction href="/rota" label="View Rota" />
           <QuickAction href="/requests" label="Request Holiday" />
           <QuickAction href="/incidents/new" label="Report Incident" />
+          <QuickAction href="/payslip" label="Payslip Calculator" />
           <QuickAction href="/emergency" label="Emergency Help" emphasis="danger" />
         </div>
       </section>
